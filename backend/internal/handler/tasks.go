@@ -315,22 +315,26 @@ func (h *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 		response.InternalError(w)
 		return
 	}
-	defer reorderRows.Close()
 
-	orderNum := 0
+	var newColIDs []uuid.UUID
 	for reorderRows.Next() {
 		var tid uuid.UUID
 		if err := reorderRows.Scan(&tid); err != nil {
 			slog.Error("tasks: scan for reorder", "err", err)
+			reorderRows.Close()
 			response.InternalError(w)
 			return
 		}
+		newColIDs = append(newColIDs, tid)
+	}
+	reorderRows.Close()
+
+	for orderNum, tid := range newColIDs {
 		if _, err = tx.Exec(r.Context(), `UPDATE tasks SET "order" = $1 WHERE id = $2`, orderNum, tid); err != nil {
 			slog.Error("tasks: renumber", "err", err)
 			response.InternalError(w)
 			return
 		}
-		orderNum++
 	}
 
 	if newStatus != oldStatus {
@@ -342,22 +346,26 @@ func (h *TaskHandler) Update(w http.ResponseWriter, r *http.Request) {
 			response.InternalError(w)
 			return
 		}
-		defer oldRows.Close()
 
-		n := 0
+		var oldColIDs []uuid.UUID
 		for oldRows.Next() {
 			var tid uuid.UUID
 			if err := oldRows.Scan(&tid); err != nil {
 				slog.Error("tasks: scan old column", "err", err)
+				oldRows.Close()
 				response.InternalError(w)
 				return
 			}
+			oldColIDs = append(oldColIDs, tid)
+		}
+		oldRows.Close()
+
+		for n, tid := range oldColIDs {
 			if _, err = tx.Exec(r.Context(), `UPDATE tasks SET "order" = $1 WHERE id = $2`, n, tid); err != nil {
 				slog.Error("tasks: renumber old", "err", err)
 				response.InternalError(w)
 				return
 			}
-			n++
 		}
 	}
 
