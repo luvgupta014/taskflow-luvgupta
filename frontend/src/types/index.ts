@@ -23,10 +23,18 @@ export interface Task {
   status: TaskStatus
   priority: TaskPriority
   project_id: string
-  assignee_id?: string
+  assignee_id?: string | null
   due_date?: string
+  order?: number
+  created_by?: string
   created_at: string
   updated_at: string
+}
+
+export interface Member {
+  id: string
+  name: string
+  email: string
 }
 
 export interface ProjectStats {

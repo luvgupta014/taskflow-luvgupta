@@ -15,12 +15,12 @@ type User struct {
 }
 
 type Project struct {
-	ID          uuid.UUID  `json:"id"`
-	Name        string     `json:"name"`
-	Description *string    `json:"description,omitempty"`
-	OwnerID     uuid.UUID  `json:"owner_id"`
-	CreatedAt   time.Time  `json:"created_at"`
-	Tasks       []Task     `json:"tasks,omitempty"`
+	ID          uuid.UUID `json:"id"`
+	Name        string    `json:"name"`
+	Description *string   `json:"description,omitempty"`
+	OwnerID     uuid.UUID `json:"owner_id"`
+	CreatedAt   time.Time `json:"created_at"`
+	Tasks       []Task    `json:"tasks,omitempty"`
 }
 
 type TaskStatus string
@@ -43,15 +43,17 @@ type Task struct {
 	Status      TaskStatus   `json:"status"`
 	Priority    TaskPriority `json:"priority"`
 	ProjectID   uuid.UUID    `json:"project_id"`
-	AssigneeID  *uuid.UUID   `json:"assignee_id,omitempty"`
+	AssigneeID  *uuid.UUID   `json:"assignee_id"`
 	DueDate     *string      `json:"due_date,omitempty"`
+	Order       int          `json:"order"`
+	CreatedBy   *uuid.UUID   `json:"created_by,omitempty"`
 	CreatedAt   time.Time    `json:"created_at"`
 	UpdatedAt   time.Time    `json:"updated_at"`
 }
 
 type ProjectStats struct {
-	ByStatus   map[string]int            `json:"by_status"`
-	ByAssignee map[string]AssigneeStat   `json:"by_assignee"`
+	ByStatus   map[string]int          `json:"by_status"`
+	ByAssignee map[string]AssigneeStat `json:"by_assignee"`
 }
 
 type AssigneeStat struct {
