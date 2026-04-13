@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -44,13 +45,13 @@ func (h *TaskHandler) List(w http.ResponseWriter, r *http.Request) {
 	idx := 2
 
 	if status := r.URL.Query().Get("status"); status != "" {
-		query += ` AND status = $` + itoa(idx)
+		query += ` AND status = $` + strconv.Itoa(idx)
 		args = append(args, status)
 		idx++
 	}
 	if assignee := r.URL.Query().Get("assignee"); assignee != "" {
 		if aid, err := uuid.Parse(assignee); err == nil {
-			query += ` AND assignee_id = $` + itoa(idx)
+			query += ` AND assignee_id = $` + strconv.Itoa(idx)
 			args = append(args, aid)
 			idx++
 		}
@@ -250,6 +251,4 @@ func (h *TaskHandler) canViewProject(r *http.Request, projectID, userID uuid.UUI
 	return exists
 }
 
-func itoa(n int) string {
-	return string(rune('0' + n))
-}
+
