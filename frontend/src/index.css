@@ -1,0 +1,45 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 224 71% 4%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 9% 46%;
+    --border: 220 13% 91%;
+    --input: 220 13% 91%;
+    --ring: 239 84% 67%;
+    --radius: 0.625rem;
+  }
+
+  .dark {
+    --background: 224 71% 4%;
+    --foreground: 213 31% 91%;
+    --muted: 223 47% 11%;
+    --muted-foreground: 215 16% 57%;
+    --border: 216 34% 17%;
+    --input: 216 34% 17%;
+    --ring: 239 84% 67%;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: theme('colors.slate.300') transparent;
+  }
+  .dark .scrollbar-thin {
+    scrollbar-color: theme('colors.slate.700') transparent;
+  }
+}
