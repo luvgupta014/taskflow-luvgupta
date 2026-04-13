@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log/slog"
 	"net/http"
+	"strconv"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
@@ -25,13 +26,27 @@ func NewProjectHandler(db *pgxpool.Pool) *ProjectHandler {
 func (h *ProjectHandler) List(w http.ResponseWriter, r *http.Request) {
 	userID, _ := middleware.UserIDFromContext(r.Context())
 
+	page, limit := 1, 20
+	if p := r.URL.Query().Get("page"); p != "" {
+		if v, err := strconv.Atoi(p); err == nil && v > 0 {
+			page = v
+		}
+	}
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if v, err := strconv.Atoi(l); err == nil && v > 0 && v <= 100 {
+			limit = v
+		}
+	}
+	offset := (page - 1) * limit
+
 	rows, err := h.db.Query(r.Context(), `
 		SELECT DISTINCT p.id, p.name, p.description, p.owner_id, p.created_at
 		FROM projects p
 		LEFT JOIN tasks t ON t.project_id = p.id
 		WHERE p.owner_id = $1 OR t.assignee_id = $1
 		ORDER BY p.created_at DESC
-	`, userID)
+		LIMIT $2 OFFSET $3
+	`, userID, limit, offset)
 	if err != nil {
 		slog.Error("projects: list", "err", err)
 		response.InternalError(w)
@@ -50,7 +65,11 @@ func (h *ProjectHandler) List(w http.ResponseWriter, r *http.Request) {
 		projects = append(projects, p)
 	}
 
-	response.JSON(w, http.StatusOK, map[string]any{"projects": projects})
+	response.JSON(w, http.StatusOK, map[string]any{
+		"projects": projects,
+		"page":     page,
+		"limit":    limit,
+	})
 }
 
 func (h *ProjectHandler) Create(w http.ResponseWriter, r *http.Request) {
@@ -66,6 +85,14 @@ func (h *ProjectHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Name == "" {
 		response.ValidationError(w, map[string]string{"name": "is required"})
+		return
+	}
+	if len(req.Name) > 255 {
+		response.ValidationError(w, map[string]string{"name": "must be less than 255 characters"})
+		return
+	}
+	if req.Description != nil && len(*req.Description) > 2000 {
+		response.ValidationError(w, map[string]string{"description": "must be less than 2000 characters"})
 		return
 	}
 
@@ -118,8 +145,8 @@ func (h *ProjectHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	rows, err := h.db.Query(r.Context(), `
 		SELECT id, title, description, status, priority, project_id, assignee_id,
-		       to_char(due_date, 'YYYY-MM-DD'), created_at, updated_at
-		FROM tasks WHERE project_id = $1 ORDER BY created_at DESC
+		       to_char(due_date, 'YYYY-MM-DD'), "order", created_by, created_at, updated_at
+		FROM tasks WHERE project_id = $1 ORDER BY status, "order" ASC, created_at ASC
 	`, projectID)
 	if err != nil {
 		slog.Error("projects: get tasks", "err", err)
@@ -132,7 +159,7 @@ func (h *ProjectHandler) Get(w http.ResponseWriter, r *http.Request) {
 	for rows.Next() {
 		var t model.Task
 		if err := rows.Scan(&t.ID, &t.Title, &t.Description, &t.Status, &t.Priority,
-			&t.ProjectID, &t.AssigneeID, &t.DueDate, &t.CreatedAt, &t.UpdatedAt); err != nil {
+			&t.ProjectID, &t.AssigneeID, &t.DueDate, &t.Order, &t.CreatedBy, &t.CreatedAt, &t.UpdatedAt); err != nil {
 			slog.Error("projects: scan task", "err", err)
 			response.InternalError(w)
 			return
@@ -172,6 +199,18 @@ func (h *ProjectHandler) Update(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		response.ValidationError(w, map[string]string{"body": "invalid JSON"})
+		return
+	}
+
+	fields := map[string]string{}
+	if req.Name != nil && len(*req.Name) > 255 {
+		fields["name"] = "must be less than 255 characters"
+	}
+	if req.Description != nil && len(*req.Description) > 2000 {
+		fields["description"] = "must be less than 2000 characters"
+	}
+	if len(fields) > 0 {
+		response.ValidationError(w, fields)
 		return
 	}
 
@@ -297,4 +336,49 @@ func (h *ProjectHandler) userHasAccess(r *http.Request, projectID, userID uuid.U
 		)
 	`, projectID, userID).Scan(&exists)
 	return exists, err
+}
+
+func (h *ProjectHandler) Members(w http.ResponseWriter, r *http.Request) {
+	userID, _ := middleware.UserIDFromContext(r.Context())
+	projectID, err := uuid.Parse(chi.URLParam(r, "id"))
+	if err != nil {
+		response.NotFound(w)
+		return
+	}
+
+	hasAccess, err := h.userHasAccess(r, projectID, userID)
+	if err != nil {
+		response.InternalError(w)
+		return
+	}
+	if !hasAccess {
+		response.NotFound(w)
+		return
+	}
+
+	rows, err := h.db.Query(r.Context(), `SELECT id, name, email FROM users ORDER BY name`)
+	if err != nil {
+		slog.Error("projects: members", "err", err)
+		response.InternalError(w)
+		return
+	}
+	defer rows.Close()
+
+	type member struct {
+		ID    uuid.UUID `json:"id"`
+		Name  string    `json:"name"`
+		Email string    `json:"email"`
+	}
+	users := []member{}
+	for rows.Next() {
+		var u member
+		if err := rows.Scan(&u.ID, &u.Name, &u.Email); err != nil {
+			slog.Error("projects: scan member", "err", err)
+			response.InternalError(w)
+			return
+		}
+		users = append(users, u)
+	}
+
+	response.JSON(w, http.StatusOK, map[string]any{"members": users})
 }

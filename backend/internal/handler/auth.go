@@ -34,7 +34,7 @@ type loginRequest struct {
 }
 
 type authResponse struct {
-	Token string `json:"token"`
+	Token string      `json:"token"`
 	User  userPayload `json:"user"`
 }
 
@@ -55,11 +55,20 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	if req.Name == "" {
 		fields["name"] = "is required"
 	}
+	if len(req.Name) > 255 {
+		fields["name"] = "must be less than 255 characters"
+	}
 	if req.Email == "" {
 		fields["email"] = "is required"
 	}
+	if len(req.Email) > 255 {
+		fields["email"] = "must be less than 255 characters"
+	}
 	if len(req.Password) < 8 {
 		fields["password"] = "must be at least 8 characters"
+	}
+	if len(req.Password) > 255 {
+		fields["password"] = "must be less than 255 characters"
 	}
 	if len(fields) > 0 {
 		response.ValidationError(w, fields)
