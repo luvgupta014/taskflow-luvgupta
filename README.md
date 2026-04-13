@@ -1,21 +1,31 @@
 # TaskFlow
 
-A full stack task management system built with Go, React, and PostgreSQL.
+A full-stack task management system built with Go, React, and PostgreSQL. Users can register, log in, create projects, add tasks, assign them to team members, and manage progress through a Kanban board with drag-and-drop reordering.
 
 ---
 
 ## 1. Overview
-
-TaskFlow lets teams create projects, break them into tasks, and track progress from todo through done. It is a small but complete product — not a prototype — with JWT authentication, a relational data model, a REST API, and a responsive UI.
 
 **Stack**
 
 | Layer | Technology |
 |---|---|
 | Backend | Go 1.22, chi router, pgx/v5, golang-migrate |
-| Frontend | React 18, TypeScript, Vite, TailwindCSS, Radix UI |
+| Frontend | React 18, TypeScript, Vite, TailwindCSS, Radix UI, @dnd-kit |
 | Database | PostgreSQL 15 |
-| Infrastructure | Docker, docker compose |
+| Infrastructure | Docker Compose, multi-stage Dockerfiles |
+
+**Key features**
+
+- JWT authentication with bcrypt (cost 12)
+- CRUD on projects and tasks with ownership checks
+- Kanban board with drag-and-drop (reorder + status change)
+- Task assignment to any registered user
+- Pagination on list endpoints
+- Stats endpoint (task counts by status and assignee)
+- Dark mode toggle (persisted to localStorage)
+- Rate limiting on auth endpoints
+- Integration tests for auth, project, and task flows
 
 ---
 
@@ -23,32 +33,38 @@ TaskFlow lets teams create projects, break them into tasks, and track progress f
 
 **Backend**
 
-I chose `chi` over a heavier framework like Gin because it is stdlib-compatible (`net/http`), has zero magic, and its middleware model is the same interface composition that Go is built around. Every handler is a plain function — easy to test, easy to read.
+I chose `chi` because it is stdlib-compatible (`net/http`), has zero magic, and its middleware model is the same interface composition Go is built around. Every handler is a plain function — easy to test, easy to read.
 
-I deliberately avoided an ORM. The schema is simple enough that raw `pgx` queries are faster to write, easier to audit, and produce no surprise SQL. Migrations are managed by `golang-migrate` and run automatically on startup via an embedded `file://` source — no manual migration step.
+No ORM. The schema is simple enough that raw `pgx` queries are faster to write, easier to audit, and produce no surprise SQL. Migrations are managed by `golang-migrate` and run automatically on startup — no manual step required.
 
-Auth is JWT-only. Sessions would add statefulness without meaningful security benefit at this scale. Bcrypt cost is 12, which keeps brute-force expensive while keeping registration under 200 ms on commodity hardware.
+Auth is JWT-only with a 24-hour expiry. Bcrypt cost is 12, which keeps brute-force expensive while keeping registration under 200 ms. JWT secret is loaded from the environment and validated for minimum entropy (≥32 characters).
 
-Error handling draws a hard line between 401 (unauthenticated) and 403 (authenticated but not allowed). These are different conditions and conflating them breaks client logic.
+Error handling draws a hard line between 401 (unauthenticated) and 403 (authenticated but not allowed). Validation errors return structured `{ "error": "validation failed", "fields": {...} }` responses.
+
+For task reordering, I use a transaction-based approach: update the task's position, then renumber all tasks in the column sequentially. This avoids gaps in order values and handles concurrent edits safely.
+
+Delete authorization checks both project ownership and task creator (`created_by` column), matching the "project owner or task creator" requirement.
 
 **Frontend**
 
-React Query handles all server state. Zustand holds auth state and is persisted to localStorage, so a page refresh keeps the user logged in. Optimistic updates on task status changes make the UI feel instant — if the server rejects, the previous state is restored from the React Query snapshot.
+React Query handles all server state. Zustand holds auth state and is persisted to localStorage, so a page refresh keeps the user logged in. Optimistic updates on task status changes make the UI feel instant — if the server rejects, the previous state is restored.
 
-I used Radix UI primitives for the modal and select components. This gives correct keyboard navigation and ARIA semantics without shipping a full component library. Styling is done with Tailwind and a custom brand colour token.
+I used Radix UI primitives for the dialog and select components — correct keyboard navigation and ARIA semantics without shipping a full component library. Drag-and-drop uses `@dnd-kit` with sortable contexts per column and droppable column containers for cross-column drops.
 
-**What I left out intentionally**
+Styling is Tailwind with a custom brand color token. Dark mode is class-based, toggled from the navbar, and persisted to localStorage.
 
-- Role-based permissions beyond owner/non-owner: the schema supports it via `assignee_id`, but a full RBAC layer would take a day and is not in the rubric.
-- Refresh tokens: a 24-hour JWT is sufficient for an assignment and keeps the auth surface small.
-- WebSocket real-time sync: the HTTP polling model is reliable and far simpler to operate. Adding SSE or WebSocket would require a session store and is treated as a bonus.
-- Pagination: endpoints return all records. With a sensible `LIMIT` in production queries, this is a one-afternoon addition that does not change any interfaces.
+**Tradeoffs**
+
+- No WebSocket/SSE real-time sync. HTTP polling via React Query is reliable and far simpler to operate.
+- No refresh tokens. A 24-hour JWT is sufficient for this scope and keeps the auth surface small.
+- No RBAC beyond owner/non-owner. The schema supports it via `assignee_id`, but a full RBAC layer is out of scope.
+- Pagination defaults are generous (20 projects, 50 tasks per page). For production data volumes, these would need tuning.
 
 ---
 
 ## 3. Running Locally
 
-Requires Docker and docker compose (v2). Nothing else.
+Requires Docker and Docker Compose (v2). Nothing else.
 
 ```bash
 git clone https://github.com/luvgupta014/taskflow-luvgupta
@@ -60,15 +76,15 @@ docker compose up
 The frontend is available at **http://localhost:3000**.
 The API is available at **http://localhost:8080**.
 
-First startup takes a minute while Go compiles and npm installs. Subsequent starts are fast.
+First startup takes a minute while Go compiles and npm installs. Subsequent starts are fast due to Docker layer caching.
 
 ---
 
 ## 4. Running Migrations
 
-Migrations run automatically when the api container starts. They are embedded in the binary and applied via `golang-migrate` before the HTTP server binds.
+Migrations run automatically when the API container starts. They are applied via `golang-migrate` before the HTTP server binds.
 
-If you want to run them manually against a local Postgres instance:
+To run manually against a local Postgres instance:
 
 ```bash
 migrate -path ./backend/migrations \
@@ -87,7 +103,7 @@ Email:    test@example.com
 Password: password123
 ```
 
-The seed also creates one project ("Website Redesign") with three tasks in different statuses so you can see the UI populated.
+The seed also creates one project ("Website Redesign") with three tasks in different statuses.
 
 ---
 
@@ -100,52 +116,51 @@ All endpoints return `Content-Type: application/json`. Protected endpoints requi
 ```
 POST /auth/register
 Body: { "name": "string", "email": "string", "password": "string" }
-201:  { "token": "string", "user": { "id", "name", "email" } }
+201:  { "token": "jwt", "user": { "id", "name", "email" } }
 
 POST /auth/login
 Body: { "email": "string", "password": "string" }
-200:  { "token": "string", "user": { "id", "name", "email" } }
+200:  { "token": "jwt", "user": { "id", "name", "email" } }
 ```
 
-### Projects
+### Projects (all require Bearer token)
 
 ```
-GET    /projects           → { "projects": [...] }
-POST   /projects           Body: { "name", "description?" } → 201 project
-GET    /projects/:id       → project + tasks array
-PATCH  /projects/:id       Body: { "name?", "description?" } → updated project
-DELETE /projects/:id       → 204
-GET    /projects/:id/stats → { "by_status": {...}, "by_assignee": {...} }
+GET    /projects?page=1&limit=20     → { "projects": [...], "page": 1, "limit": 20 }
+POST   /projects                     Body: { "name", "description?" } → 201 project
+GET    /projects/:id                 → project object with tasks array
+PATCH  /projects/:id                 Body: { "name?", "description?" } → updated project (owner only)
+DELETE /projects/:id                 → 204 (owner only, cascades tasks)
+GET    /projects/:id/stats           → { "by_status": {...}, "by_assignee": {...} }
+GET    /projects/:id/members         → { "members": [{ "id", "name", "email" }] }
 ```
 
-### Tasks
+### Tasks (all require Bearer token)
 
 ```
-GET    /projects/:id/tasks?status=&assignee=  → { "tasks": [...] }
-POST   /projects/:id/tasks                    Body: task fields → 201 task
-PATCH  /tasks/:id                             Body: partial task → updated task
-DELETE /tasks/:id                             → 204
+GET    /projects/:id/tasks?status=&assignee=&page=1&limit=50  → { "tasks": [...], "page", "limit" }
+POST   /projects/:id/tasks           Body: { "title", "description?", "status?", "priority?", "assignee_id?", "due_date?" } → 201 task
+PATCH  /tasks/:id                    Body: partial fields including "order?" → updated task
+DELETE /tasks/:id                    → 204 (project owner or task creator)
 ```
 
-### Error shape
+### Error Responses
 
 ```json
-{ "error": "validation failed", "fields": { "email": "is required" } }
-{ "error": "unauthorized" }
-{ "error": "forbidden" }
-{ "error": "not found" }
+{ "error": "validation failed", "fields": { "email": "is required" } }   // 400
+{ "error": "unauthorized" }                                                // 401
+{ "error": "forbidden" }                                                   // 403
+{ "error": "not found" }                                                   // 404
+{ "error": "too many requests, please try again later" }                   // 429
 ```
 
 ---
 
 ## 7. What I'd Do With More Time
 
-**Testing.** I have zero automated tests here, which I am not proud of. The first thing I would add is a table-driven integration test suite hitting a test database — auth flows, project ownership checks, and task filter correctness. These are the highest-value tests for an API this size.
-
-**Pagination.** Every list endpoint returns all records. Adding `?page=&limit=` with a `Link` header is straightforward but I ran out of runway.
-
-**Drag-and-drop.** The UI has a flat task list. A Kanban board with `@dnd-kit` columns per status would be a better task management experience.
-
-**Input sanitisation.** The current validation is basic (required, pattern). A production service would need length caps, rate limiting on auth endpoints, and stricter content-type enforcement.
-
-**Config management.** All config comes from env vars, which is correct, but there is no validation that JWT_SECRET meets a minimum entropy requirement. A weak secret is as bad as a hardcoded one.
+- **Refresh tokens**: A sliding-window refresh token would improve UX for long sessions without compromising security.
+- **WebSocket/SSE**: Real-time task updates when collaborating. The current polling model (30s stale time) is adequate for single-user but would lag in a team setting.
+- **Full RBAC**: Currently it's owner vs. non-owner. A role system (admin, editor, viewer) per project would be the natural next step.
+- **Better test coverage**: The integration tests cover core flows but don't cover edge cases like concurrent reordering, pagination boundaries, or rate limit behaviour.
+- **Search and filtering**: Full-text search on task title/description, combined filters (priority + status + assignee), and date range filtering.
+- **Audit log**: Tracking who changed what and when — useful for team accountability.
