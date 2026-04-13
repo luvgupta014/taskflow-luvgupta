@@ -20,6 +20,7 @@ export default function ProjectDetail() {
   const { user } = useAuthStore()
 
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [assigneeFilter, setAssigneeFilter] = useState<string>('all')
   const [taskModalOpen, setTaskModalOpen] = useState(false)
   const [editingTask, setEditingTask] = useState<Task | undefined>()
   const [viewMode, setViewMode] = useState<'kanban' | 'list'>('kanban')
@@ -73,7 +74,9 @@ export default function ProjectDetail() {
   })
 
   const filtered = (project?.tasks ?? []).filter(
-    (t) => statusFilter === 'all' || t.status === statusFilter
+    (t) =>
+      (statusFilter === 'all' || t.status === statusFilter) &&
+      (assigneeFilter === 'all' || t.assignee_id === assigneeFilter)
   )
 
   const isOwner = project?.owner_id === user?.id
@@ -119,17 +122,30 @@ export default function ProjectDetail() {
 
           <div className="flex flex-wrap items-center gap-2">
             {viewMode === 'list' && (
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-36" id="status-filter">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All statuses</SelectItem>
-                  <SelectItem value="todo">To Do</SelectItem>
-                  <SelectItem value="in_progress">In Progress</SelectItem>
-                  <SelectItem value="done">Done</SelectItem>
-                </SelectContent>
-              </Select>
+              <>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-36" id="status-filter">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All statuses</SelectItem>
+                    <SelectItem value="todo">To Do</SelectItem>
+                    <SelectItem value="in_progress">In Progress</SelectItem>
+                    <SelectItem value="done">Done</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={assigneeFilter} onValueChange={setAssigneeFilter}>
+                  <SelectTrigger className="w-36" id="assignee-filter">
+                    <SelectValue placeholder="All assignees" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All assignees</SelectItem>
+                    {members.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </>
             )}
 
             <div className="flex items-center gap-1 border border-slate-200 dark:border-slate-700 rounded-lg p-1">
@@ -204,7 +220,7 @@ export default function ProjectDetail() {
               <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white py-20 dark:border-slate-700 dark:bg-slate-900">
                 <p className="font-medium text-slate-500 dark:text-slate-400">No tasks here</p>
                 <p className="mt-1 text-sm text-slate-400 dark:text-slate-500">
-                  {statusFilter === 'all' ? 'Add your first task to get started' : 'Try a different filter'}
+                  {statusFilter === 'all' && assigneeFilter === 'all' ? 'Add your first task to get started' : 'Try a different filter'}
                 </p>
               </div>
             )}
