@@ -33,6 +33,9 @@ func Load() (*Config, error) {
 	if secret == "" {
 		return nil, fmt.Errorf("JWT_SECRET is required")
 	}
+	if len(secret) < 32 {
+		return nil, fmt.Errorf("JWT_SECRET must be at least 32 characters for sufficient entropy")
+	}
 
 	port := os.Getenv("SERVER_PORT")
 	if port == "" {
