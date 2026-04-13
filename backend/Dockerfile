@@ -5,8 +5,8 @@ WORKDIR /build
 RUN apk add --no-cache git
 
 COPY . .
-RUN go mod download
-RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /app/server ./cmd/api
+RUN go mod tidy
+RUN CGO_ENABLED=0 GOOS=linux go build -mod=mod -ldflags="-s -w" -o /app/server ./cmd/api
 
 FROM alpine:3.19
 
