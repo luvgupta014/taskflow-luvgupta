@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { Plus, Loader2, Trash2, ArrowLeft, BarChart2 } from 'lucide-react'
+import { Plus, Loader2, Trash2, ArrowLeft, BarChart2, User } from 'lucide-react'
 import { projectsApi, tasksApi } from '@/lib/api'
 import { useAuthStore } from '@/store/auth'
 import type { Task, TaskStatus } from '@/types'
@@ -30,20 +30,32 @@ export default function ProjectDetail() {
     enabled: !!id,
   })
 
+  const { data: members = [] } = useQuery({
+    queryKey: ['members', id],
+    queryFn: () => projectsApi.members(id!),
+    enabled: !!id,
+  })
+
+  const memberMap = useMemo(() => {
+    const map: Record<string, string> = {}
+    members.forEach((m) => { map[m.id] = m.name })
+    return map
+  }, [members])
+
   const deleteProject = useMutation({
     mutationFn: () => projectsApi.delete(id!),
     onSuccess: () => navigate('/projects'),
   })
 
   const updateTaskStatus = useMutation({
-    mutationFn: ({ taskId, status }: { taskId: string; status: TaskStatus }) =>
-      tasksApi.update(taskId, { status }),
-    onMutate: async ({ taskId, status }) => {
+    mutationFn: ({ taskId, status, order }: { taskId: string; status: TaskStatus; order?: number }) =>
+      tasksApi.update(taskId, { status, ...(order !== undefined && { order }) }),
+    onMutate: async ({ taskId, status, order }) => {
       await qc.cancelQueries({ queryKey: ['project', id] })
       const prev = qc.getQueryData(['project', id])
       qc.setQueryData(['project', id], (old: typeof project) => {
         if (!old) return old
-        return { ...old, tasks: old.tasks?.map((t) => t.id === taskId ? { ...t, status } : t) }
+        return { ...old, tasks: old.tasks?.map((t) => t.id === taskId ? { ...t, status, ...(order !== undefined && { order }) } : t) }
       })
       return { prev }
     },
@@ -169,19 +181,22 @@ export default function ProjectDetail() {
           </div>
         </div>
 
-        {viewMode === 'kanban' && (project?.tasks ?? []).length > 0 ? (
+        {viewMode === 'kanban' && (project?.tasks ?? []).length > 0 && (
           <KanbanBoard
             tasks={project.tasks || []}
             projectId={id!}
             isOwner={isOwner}
+            memberMap={memberMap}
             onEditTask={(task) => { setEditingTask(task); setTaskModalOpen(true) }}
           />
-        ) : viewMode === 'kanban' ? (
+        )}
+
+        {viewMode === 'kanban' && (project?.tasks ?? []).length === 0 && (
           <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white py-20 dark:border-slate-700 dark:bg-slate-900">
             <p className="font-medium text-slate-500 dark:text-slate-400">No tasks yet</p>
             <p className="mt-1 text-sm text-slate-400 dark:text-slate-500">Add your first task to get started</p>
           </div>
-        ) : null}
+        )}
 
         {viewMode === 'list' && (
           <>
@@ -229,6 +244,12 @@ export default function ProjectDetail() {
 
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge variant={task.priority}>{priorityLabel[task.priority]}</Badge>
+                    {task.assignee_id && memberMap[task.assignee_id] && (
+                      <span className="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+                        <User className="h-3 w-3" />
+                        {memberMap[task.assignee_id]}
+                      </span>
+                    )}
                     {task.due_date && (
                       <span className={cn(
                         'text-xs',
@@ -275,6 +296,7 @@ export default function ProjectDetail() {
         onOpenChange={setTaskModalOpen}
         projectId={id!}
         task={editingTask}
+        members={members}
         onSuccess={() => qc.invalidateQueries({ queryKey: ['project', id] })}
       />
     </div>

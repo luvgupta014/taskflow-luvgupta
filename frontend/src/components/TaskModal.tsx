@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
 import { useForm, Controller } from 'react-hook-form'
 import { tasksApi } from '@/lib/api'
-import type { Task, TaskStatus, TaskPriority } from '@/types'
+import type { Task, TaskStatus, TaskPriority, Member } from '@/types'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -20,6 +20,7 @@ interface FormValues {
   status: TaskStatus
   priority: TaskPriority
   due_date: string
+  assignee_id: string
 }
 
 interface TaskModalProps {
@@ -27,10 +28,11 @@ interface TaskModalProps {
   onOpenChange: (open: boolean) => void
   projectId: string
   task?: Task
+  members: Member[]
   onSuccess: () => void
 }
 
-export function TaskModal({ open, onOpenChange, projectId, task, onSuccess }: TaskModalProps) {
+export function TaskModal({ open, onOpenChange, projectId, task, members, onSuccess }: TaskModalProps) {
   const isEdit = !!task
 
   const { register, handleSubmit, control, reset, formState: { errors, isSubmitting } } = useForm<FormValues>({
@@ -40,6 +42,7 @@ export function TaskModal({ open, onOpenChange, projectId, task, onSuccess }: Ta
       status: 'todo',
       priority: 'medium',
       due_date: '',
+      assignee_id: 'none',
     },
   })
 
@@ -51,22 +54,26 @@ export function TaskModal({ open, onOpenChange, projectId, task, onSuccess }: Ta
         status: task.status,
         priority: task.priority,
         due_date: task.due_date ?? '',
+        assignee_id: task.assignee_id ?? 'none',
       })
     } else {
-      reset({ title: '', description: '', status: 'todo', priority: 'medium', due_date: '' })
+      reset({ title: '', description: '', status: 'todo', priority: 'medium', due_date: '', assignee_id: 'none' })
     }
   }, [task, reset, open])
 
   const onSubmit = async (data: FormValues) => {
-    const payload = {
-      ...data,
+    const payload: Record<string, unknown> = {
+      title: data.title,
+      status: data.status,
+      priority: data.priority,
       description: data.description || undefined,
       due_date: data.due_date || undefined,
+      assignee_id: data.assignee_id === 'none' ? null : data.assignee_id,
     }
     if (isEdit) {
-      await tasksApi.update(task!.id, payload)
+      await tasksApi.update(task!.id, payload as Partial<Task>)
     } else {
-      await tasksApi.create(projectId, payload)
+      await tasksApi.create(projectId, payload as Partial<Task>)
     }
     onSuccess()
     onOpenChange(false)
@@ -134,6 +141,25 @@ export function TaskModal({ open, onOpenChange, projectId, task, onSuccess }: Ta
                 )}
               />
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Assignee <span className="text-slate-400">(optional)</span></Label>
+            <Controller
+              name="assignee_id"
+              control={control}
+              render={({ field }) => (
+                <Select value={field.value} onValueChange={field.onChange}>
+                  <SelectTrigger id="task-assignee"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Unassigned</SelectItem>
+                    {members.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            />
           </div>
 
           <div className="space-y-1.5">

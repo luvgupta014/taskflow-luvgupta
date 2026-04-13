@@ -1,6 +1,6 @@
 import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { GripVertical, Edit2, Trash2 } from 'lucide-react'
+import { GripVertical, Edit2, Trash2, User } from 'lucide-react'
 import { Badge, priorityLabel } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import type { Task } from '@/types'
@@ -10,11 +10,12 @@ interface KanbanCardProps {
   task: Task
   isActive: boolean
   isOwner: boolean
+  assigneeName?: string
   onEdit: () => void
   onDelete: () => void
 }
 
-export default function KanbanCard({ task, isActive, isOwner, onEdit, onDelete }: KanbanCardProps) {
+export default function KanbanCard({ task, isActive, isOwner, assigneeName, onEdit, onDelete }: KanbanCardProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id })
 
   const style = {
@@ -54,6 +55,12 @@ export default function KanbanCard({ task, isActive, isOwner, onEdit, onDelete }
           )}
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <Badge variant={task.priority} className="text-xs">{priorityLabel[task.priority]}</Badge>
+            {assigneeName && (
+              <span className="inline-flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400">
+                <User className="h-3 w-3" />
+                {assigneeName}
+              </span>
+            )}
             {task.due_date && (
               <span className={cn(
                 'text-xs font-medium',

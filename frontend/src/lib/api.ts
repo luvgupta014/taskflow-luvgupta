@@ -1,5 +1,5 @@
 import axios from 'axios'
-import type { AuthResponse, Project, Task, ProjectStats } from '@/types'
+import type { AuthResponse, Project, Task, ProjectStats, Member } from '@/types'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? '/api'
 
@@ -52,6 +52,9 @@ export const projectsApi = {
 
   stats: (id: string) =>
     http.get<ProjectStats>(`/projects/${id}/stats`).then((r) => r.data),
+
+  members: (id: string) =>
+    http.get<{ members: Member[] }>(`/projects/${id}/members`).then((r) => r.data.members),
 }
 
 export const tasksApi = {
