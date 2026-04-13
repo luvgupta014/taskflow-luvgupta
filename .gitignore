@@ -1,2 +1,5 @@
 .env
 *.env.local
+assignment.txt
+IMPLEMENTATION_ANALYSIS.md
+node_modules/
