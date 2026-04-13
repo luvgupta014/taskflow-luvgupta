@@ -59,7 +59,7 @@ export default function Register() {
               <Label htmlFor="name">Full name</Label>
               <Input
                 id="name"
-                placeholder="Jane Doe"
+                placeholder="Luv Gupta"
                 error={errors.name?.message ?? serverError.name}
                 {...register('name', { required: 'Name is required' })}
               />

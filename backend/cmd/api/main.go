@@ -51,6 +51,8 @@ func main() {
 	projectH := handler.NewProjectHandler(pool)
 	taskH := handler.NewTaskHandler(pool)
 
+	authLimiter := middleware.NewRateLimiter(5) // 5 requests per minute per IP
+
 	r := chi.NewRouter()
 	r.Use(chimiddleware.RequestID)
 	r.Use(chimiddleware.RealIP)
@@ -58,8 +60,11 @@ func main() {
 	r.Use(chimiddleware.Timeout(30 * time.Second))
 	r.Use(corsMiddleware)
 
-	r.Post("/auth/register", authH.Register)
-	r.Post("/auth/login", authH.Login)
+	r.Group(func(r chi.Router) {
+		r.Use(middleware.AuthRateLimiter(authLimiter))
+		r.Post("/auth/register", authH.Register)
+		r.Post("/auth/login", authH.Login)
+	})
 
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Auth(cfg.JWTSecret))
