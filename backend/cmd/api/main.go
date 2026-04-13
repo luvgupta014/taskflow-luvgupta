@@ -75,6 +75,7 @@ func main() {
 		r.Patch("/projects/{id}", projectH.Update)
 		r.Delete("/projects/{id}", projectH.Delete)
 		r.Get("/projects/{id}/stats", projectH.Stats)
+		r.Get("/projects/{id}/members", projectH.Members)
 
 		r.Get("/projects/{id}/tasks", taskH.List)
 		r.Post("/projects/{id}/tasks", taskH.Create)
