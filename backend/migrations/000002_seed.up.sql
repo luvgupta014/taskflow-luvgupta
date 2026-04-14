@@ -3,7 +3,7 @@ VALUES (
     'a0000000-0000-0000-0000-000000000001',
     'Test User',
     'test@example.com',
-    '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4J8F9.H2VC',
+    '$2a$12$J1bKzAhBsQQafi9a26ZSy.RqB9zis7I/csSSwtNqYunS2LJW2qusa',
     now()
 ) ON CONFLICT (email) DO UPDATE SET name=EXCLUDED.name, password=EXCLUDED.password;
 
