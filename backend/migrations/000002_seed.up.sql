@@ -5,7 +5,7 @@ VALUES (
     'test@example.com',
     '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewdBPj4J8F9.H2VC',
     now()
-) ON CONFLICT (email) DO NOTHING;
+) ON CONFLICT (email) DO UPDATE SET name=EXCLUDED.name, password=EXCLUDED.password;
 
 INSERT INTO projects (id, name, description, owner_id, created_at)
 VALUES (

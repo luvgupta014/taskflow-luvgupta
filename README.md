@@ -75,6 +75,17 @@ docker compose up
 
 First build takes ~60 seconds (Go compile + npm install). After that, subsequent starts reuse cached layers and are fast.
 
+**Clean Start (Fresh Database)**
+
+If you want a completely fresh database (recommended on first run or after experimenting):
+
+```bash
+docker compose down -v
+docker compose up --build
+```
+
+The `-v` flag removes named volumes, so `pgdata` is recreated. Migrations run automatically on startup.
+
 ---
 
 ## 4. Running Migrations
